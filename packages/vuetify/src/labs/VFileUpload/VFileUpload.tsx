@@ -42,14 +42,33 @@ export type VFileUploadSlots = {
 }
 
 export const makeVFileUploadProps = propsFactory({
+  accept: {
+    type: String,
+    default: '*',
+  },
   browseText: {
     type: String,
     default: '$vuetify.fileUpload.browse',
   },
+  capture: {
+    type: [Boolean, String],
+    default: undefined,
+    validator: (val: any) => {
+      return ['user', 'environment'].includes(val)
+    },
+  },
+  // Non-standard attributes
+  directory: Boolean,
   dividerText: {
     type: String,
     default: '$vuetify.fileUpload.divider',
   },
+  limit: {
+    type: Number,
+    default: 0,
+  },
+  multipart: Boolean,
+  preview: Boolean,
   title: {
     type: String,
     default: '$vuetify.fileUpload.title',
@@ -93,10 +112,12 @@ export const VFileUpload = genericComponent<VFileUploadSlots>()({
   props: makeVFileUploadProps(),
 
   emits: {
+    change: (files: readonly File[]) => true,
+    'click:remove': () => true,
     'update:modelValue': (files: File[]) => true,
   },
 
-  setup (props, { attrs, slots }) {
+  setup (props, { attrs, emit, slots }) {
     const { t } = useLocale()
     const { densityClasses } = useDensity(props)
     const model = useProxiedModel(
@@ -158,12 +179,32 @@ export const VFileUpload = genericComponent<VFileUploadSlots>()({
       model.value = array
     }
 
+    function onChange (e: Event) {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!e.target) return
+
+      const target = e.target as HTMLInputElement
+      const files = [...target.files ?? []]
+
+      // TODO getUid
+
+      if (props.multiple && props.limit > 0 && files.length > props.limit) {
+        return
+      }
+      model.value = files
+
+      emit('change', model.value)
+    }
+
     function onClick () {
       inputRef.value?.click()
     }
 
     function onClickRemove (index: number) {
       model.value = model.value.filter((_, i) => i !== index)
+      emit('change', model.value)
 
       if (model.value.length > 0 || !inputRef.value) return
 
@@ -177,20 +218,19 @@ export const VFileUpload = genericComponent<VFileUploadSlots>()({
       const cardProps = VSheet.filterProps(props)
       const dividerProps = VDivider.filterProps(props)
       const [rootAttrs, inputAttrs] = filterInputAttrs(attrs)
+      const directoryProps = props.directory ? { directory: true, webkitdirectory: true } : {}
 
       const inputNode = (
         <input
+          accept={ props.accept }
+          capture={ props.capture }
           ref={ inputRef }
           type="file"
           disabled={ props.disabled }
           multiple={ props.multiple }
           name={ props.name }
-          onChange={ e => {
-            if (!e.target) return
-
-            const target = e.target as HTMLInputElement
-            model.value = [...target.files ?? []]
-          }}
+          onChange={ onChange }
+          { ...directoryProps }
           { ...inputAttrs }
         />
       )
